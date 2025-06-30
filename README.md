@@ -98,8 +98,8 @@ This guide is broken into two parts: deploying the backend Lambda function and c
 
 1.  **Clone the Repository:**
     ```bash
-    git clone <your-repo-url>
-    cd <your-repo-directory>
+    git clone https://github.com/Harsh1210/odoo-xmlrpc-opportunitity-creation-lambda-api.git
+    cd odoo-xmlrpc-opportunitity-creation-lambda-api
     ```
 
 2.  **Install Dependencies:**
