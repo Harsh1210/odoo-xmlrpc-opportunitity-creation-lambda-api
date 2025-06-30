@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Lambda Test Form</title>
+    <style>
+        body { font-family: sans-serif; max-width: 500px; margin: 2rem auto; }
+        input, textarea, button { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; }
+        #response { margin-top: 20px; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Odoo Test Form</h1>
+    <form id="testForm">
+        <input type="text" id="name" placeholder="Contact Name" value="HTML Form Tester" required><br>
+        <input type="email" id="email" placeholder="Email" value="html.test@example.com" required><br>
+        <textarea id="message" placeholder="Message">Test message from sample HTML form.</textarea><br>
+        <button type="submit">Submit to Lambda</button>
+    </form>
+    <div id="response"></div>
+
+    <script>
+        // --- CONFIGURE THESE VALUES ---
+        const LAMBDA_URL = 'YOUR_LAMBDA_FUNCTION_URL';
+        const CLIENT_ID = 'YOUR_CLIENT_ID';
+        const CLIENT_SECRET = 'YOUR_CLIENT_SECRET';
+
+        document.getElementById('testForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const responseDiv = document.getElementById('response');
+            responseDiv.textContent = 'Submitting...';
+            responseDiv.className = '';
+
+            const payload = {
+                name: `Test from HTML: ${document.getElementById('name').value}`,
+                contact_name: document.getElementById('name').value,
+                email_from: document.getElementById('email').value,
+                description: document.getElementById('message').value,
+            };
+
+            try {
+                const response = await fetch(LAMBDA_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-client-id': CLIENT_ID,
+                        'x-client-secret': CLIENT_SECRET
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Request failed');
+                }
+                
+                responseDiv.textContent = `Success! Odoo ID: ${result.leadId}`;
+                responseDiv.className = 'success';
+            } catch (err) {
+                responseDiv.textContent = `Error: ${err.message}`;
+                responseDiv.className = 'error';
+            }
+        });
+    </script>
+</body>
+</html>
