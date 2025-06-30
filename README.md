@@ -1,1 +1,250 @@
-# odoo-xmlrpc-opportunitity-creation-lambda-api
+# Serverless Odoo CRM Connector
+
+This project provides a secure, serverless solution for connecting a frontend web form directly to your Odoo CRM. It uses an AWS Lambda function written in Python to receive form submissions and create new opportunities in Odoo, without the need to manage a dedicated backend server.
+
+## Features
+
+-   **Direct Odoo Integration:** Creates Opportunities directly in the Odoo CRM pipeline.
+-   **Serverless Architecture:** Low-cost, scalable, and maintenance-free, powered by AWS Lambda.
+-   **Secure Endpoint:** Uses a Client ID and Secret to protect the public-facing Lambda Function URL from unauthorized access.
+-   **Email Notifications (Optional):** Can be configured to send email notifications for new opportunities using Gmail.
+-   **Decoupled:** The frontend and backend are completely separate, allowing you to use any web technology (React, Vue, plain HTML, etc.).
+
+## Architecture Flow
+
+The data flows from the user's browser to your Odoo CRM in the following sequence:
+
+1.  **Frontend Form**: A user submits the contact form on your website.
+2.  **HTTPS Request**: The frontend sends a `POST` request to the AWS Lambda Function URL, including the form data and security credentials in the headers.
+3.  **AWS Lambda**: The Python function is triggered. It validates the client credentials, authenticates with your Odoo instance, and creates a new opportunity.
+4.  **Odoo CRM**: The new opportunity appears in your CRM pipeline, ready for your sales team.
+
+```Bash
+[User on Website] --(Submits Form)--> [React Contact Page] --(HTTPS POST Request)--> [AWS Lambda Function URL] --(Invokes)--> [Python Lambda Function] --(XML-RPC)--> [Odoo CRM]
+```
+---
+
+## Prerequisites
+
+Before you begin, ensure you have the following:
+
+1.  **AWS Account:** With permissions to create IAM roles, Lambda functions, and Function URLs.
+2.  **Odoo Account:** An Odoo instance (cloud or self-hosted) with a user account that has permissions to create CRM Opportunities.
+3.  **Google Account:** A Gmail account with 2-Step Verification enabled to generate an App Password for email notifications.
+4.  **Node.js & npm:** Required to run the React frontend locally for testing.
+5.  **Git:** To manage the source code.
+
+---
+
+## Setup and Deployment
+
+This guide is broken into two parts: deploying the backend Lambda function and configuring the frontend application.
+
+### Part 1: Backend Deployment (AWS Lambda)
+
+#### Step 1: Generate a Google App Password
+*This is only required if you plan to re-enable email notifications.*
+
+1.  Go to your Google Account security settings: [myaccount.google.com/security](https://myaccount.google.com/security).
+2.  Ensure **2-Step Verification** is turned **ON**.
+3.  Click on **App passwords**.
+4.  For "Select app", choose **"Other (Custom name)"**, name it `Odoo Lambda`, and click **GENERATE**.
+5.  Copy the 16-digit password shown on the yellow background. **Save this immediately**, as you won't see it again.
+
+#### Step 2: Create the Lambda Function
+1.  In the AWS Console, navigate to the **Lambda** service.
+2.  Click **Create function**.
+3.  Select **Author from scratch**.
+4.  **Function name:** `odoo-opportunity-creator`.
+5.  **Runtime:** Choose **Python 3.11** (or a later version).
+6.  **Architecture:** `x86_64`.
+7.  Click **Create function**.
+
+#### Step 3: Deploy the Code
+1.  On your new function's page, scroll down to the **Code source** section.
+2.  Open the `lambda_function.py` file.
+3.  Delete the boilerplate code and paste the entire content of the Python script from the `lambda/` directory of this repository.
+4.  Click the **Deploy** button.
+
+#### Step 4: Configure Environment Variables
+*This is the most critical step for security and functionality.*
+
+1.  Go to the **Configuration** tab and select **Environment variables**.
+2.  Click **Edit** and add the following keys and their corresponding values:
+    * `ODOO_URL`: Your Odoo domain (e.g., `your-company.odoo.com`), without `https://`.
+    * `ODOO_DB`: The name of your Odoo database.
+    * `ODOO_USERNAME`: The Odoo user's login email.
+    * `ODOO_PASSWORD`: The Odoo user's password or API Key.
+    * `CLIENT_ID`: A secure, hard-to-guess string you create (e.g., a UUID).
+    * `CLIENT_SECRET`: Another secure, hard-to-guess secret string.
+    * `GMAIL_EMAIL`: Your full Gmail address (`your.email@gmail.com`).
+    * `GMAIL_APP_PASSWORD`: The 16-digit Google App Password you generated.
+    * `NOTIFICATION_EMAIL`: A comma-separated list of emails to receive notifications (e.g., `sales@example.com,manager@example.com`).
+
+3.  Click **Save**.
+
+#### Step 5: Create and Configure the Function URL
+1.  Still on the **Configuration** tab, select **Function URL**.
+2.  Click **Create function URL**.
+3.  **Auth type:** Choose **`NONE`**.
+4.  **CORS:** Check the box to **Configure cross-origin resource sharing (CORS)**.
+    * **Allow origin:** `*` (for testing) or your website's domain `https://www.your-domain.com` (for production).
+    * **Allow methods:** `POST`, `OPTIONS`.
+    * **Allow headers:** `Content-Type`, `x-client-id`, `x-client-secret`.
+5.  Click **Save**.
+6.  Copy the generated **Function URL**. You will need this for the frontend.
+
+### Part 2: Frontend Configuration
+
+1.  **Clone the Repository:**
+    ```bash
+    git clone <your-repo-url>
+    cd <your-repo-directory>
+    ```
+
+2.  **Install Dependencies:**
+    ```bash
+    npm install
+    ```
+
+3.  **Configure `contact.tsx`:**
+    Open `src/pages/contact.tsx` and update the constants at the top of the file:
+    ```typescript
+    const LAMBDA_FUNCTION_URL = 'PASTE_YOUR_FUNCTION_URL_HERE';
+    const CLIENT_ID = 'PASTE_YOUR_CLIENT_ID_HERE';
+    const CLIENT_SECRET = 'PASTE_YOUR_CLIENT_SECRET_HERE';
+    ```
+
+4.  **Run the Frontend Locally:**
+    ```bash
+    npm run dev
+    ```
+    This will start the development server, usually at `http://localhost:8080`.
+
+---
+
+## End-to-End Testing
+
+1.  Open your browser and navigate to the local development URL.
+2.  Go to the contact page.
+3.  Open the browser's Developer Tools (F12 or Ctrl+Shift+I) and select the **Network** and **Console** tabs.
+4.  Fill out and submit the form.
+5.  **Check for Success:**
+    * A "Success!" toast message should appear on the webpage.
+    * The browser console should log the successful response from Lambda.
+    * Log in to Odoo and confirm the new opportunity has been created in your CRM pipeline.
+
+---
+
+## Troubleshooting
+
+If you encounter issues, check the following common problems and solutions. The best place to start is always the **CloudWatch Logs** for your Lambda function.
+
+| Error Message / Symptom                                        | Common Cause                                                                                             | Solution                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{"error": "Unauthorized"}` or `401 Unauthorized`              | The `x-client-id` or `x-client-secret` sent from the frontend do not match the Lambda environment variables. | Double-check that the `CLIENT_ID` and `CLIENT_SECRET` values in your frontend code are an exact match (including case) for the values in your Lambda function's **Environment variables**.                                                             |
+| `{"error": "Method Not Allowed"}` or `405 Method Not Allowed`    | You are making a `GET` (or other) request to the endpoint, but it only accepts `POST`.                   | Ensure you are testing with a `POST` request. If you paste the URL in a browser, it sends a `GET` request. Use `curl`, Postman, or the provided sample `test.html` form. Check that your React `fetch` call explicitly specifies `method: 'POST'`. |
+| `{"error": "Could not authenticate with Odoo: ..."}`           | One of the Odoo-related environment variables (`ODOO_URL`, `ODOO_DB`, `ODOO_USERNAME`, `ODOO_PASSWORD`) is incorrect. | Carefully verify all four Odoo environment variables in your Lambda configuration. Check for typos, extra spaces, or using `http://` in the URL. Ensure the user has the correct permissions in Odoo.                                                  |
+| The request times out (e.g., `Status: timeout`)                | The Lambda function timeout is too short, especially when email sending is enabled.                      | In your Lambda function's **Configuration -> General configuration**, increase the **Timeout** to at least **30 seconds**. The default of 3-5 seconds is often not enough for making multiple network calls.                                             |
+| CORS Error in browser console (e.g., `blocked by CORS policy`) | The CORS settings on the Lambda Function URL are incorrect or missing.                                     | Go to your Lambda's **Configuration -> Function URL**. Click **Edit**. Ensure CORS is enabled and that `Allow origin`, `Allow methods`, and `Allow headers` are configured correctly as described in the setup guide.                                |
+| The frontend shows "Submission Failed" but the Lambda logs show success. | This often indicates a client-side issue where the browser cannot correctly parse the successful response from Lambda. | Ensure your frontend code correctly checks `response.ok` before attempting to parse the JSON body. See the provided React and HTML examples for a robust `try/catch` implementation.                                                        |
+
+---
+
+## FAQ
+
+**Q: Is it secure to put the `CLIENT_ID` and `CLIENT_SECRET` in the frontend JavaScript?**
+
+**A:** While this setup is much more secure than exposing Odoo credentials, the Client ID and Secret are still visible in the client-side code. For production applications, you should use your build system (like Webpack or Vite) to inject these values from `.env` files. This makes it easier to manage different credentials for development and production without hardcoding them. For the highest security, you could implement a more advanced auth flow like OAuth or use AWS WAF to rate-limit and protect the endpoint.
+
+**Q: How do I re-enable the email notifications?**
+
+**A:** In the `lambda_function.py` script, find the section labeled `"Step 3: Send an Email Notification"` and uncomment the entire `if lead_id ...` block. Make sure your `GMAIL_EMAIL` and `GMAIL_APP_PASSWORD` environment variables are correctly set.
+
+**Q: Can I use this function to create other records in Odoo, like Contacts or Helpdesk Tickets?**
+
+**A:** Yes, absolutely. You would need to make two changes in `lambda_function.py`:
+1.  **Model Name:** Change the model string from `'crm.lead'` to the target model's technical name (e.g., `'res.partner'` for contacts, `'helpdesk.ticket'` for tickets).
+2.  **Payload Data:** In your frontend `contact.tsx` file, modify the `opportunityPayload` object to include the fields required by the new model.
+
+**Q: Why not just call the Odoo XML-RPC API directly from the frontend?**
+
+**A:** Calling Odoo directly from the browser would require exposing your Odoo username and password (or a master API key) to anyone who inspects the website's source code. This is a major security vulnerability. The Lambda function acts as a secure proxy, keeping all your credentials safe on the server side.
+
+---
+
+## Quick Test with a Sample Form
+
+If you want to test the Lambda function without the full React setup, you can use this simple HTML file. Save it as `test.html`, update the configuration values, and open it in your browser.
+
+```html
+<!-- test.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Lambda Test Form</title>
+    <style>
+        body { font-family: sans-serif; max-width: 500px; margin: 2rem auto; }
+        input, textarea, button { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; }
+        #response { margin-top: 20px; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Odoo Test Form</h1>
+    <form id="testForm">
+        <input type="text" id="name" placeholder="Contact Name" value="HTML Form Tester" required><br>
+        <input type="email" id="email" placeholder="Email" value="html.test@example.com" required><br>
+        <textarea id="message" placeholder="Message">Test message from sample HTML form.</textarea><br>
+        <button type="submit">Submit to Lambda</button>
+    </form>
+    <div id="response"></div>
+
+    <script>
+        // --- CONFIGURE THESE VALUES ---
+        const LAMBDA_URL = 'YOUR_LAMBDA_FUNCTION_URL';
+        const CLIENT_ID = 'YOUR_CLIENT_ID';
+        const CLIENT_SECRET = 'YOUR_CLIENT_SECRET';
+
+        document.getElementById('testForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const responseDiv = document.getElementById('response');
+            responseDiv.textContent = 'Submitting...';
+            responseDiv.className = '';
+
+            const payload = {
+                name: `Test from HTML: ${document.getElementById('name').value}`,
+                contact_name: document.getElementById('name').value,
+                email_from: document.getElementById('email').value,
+                description: document.getElementById('message').value,
+            };
+
+            try {
+                const response = await fetch(LAMBDA_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-client-id': CLIENT_ID,
+                        'x-client-secret': CLIENT_SECRET
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Request failed');
+                }
+                
+                responseDiv.textContent = `Success! Odoo ID: ${result.leadId}`;
+                responseDiv.className = 'success';
+            } catch (err) {
+                responseDiv.textContent = `Error: ${err.message}`;
+                responseDiv.className = 'error';
+            }
+        });
+    </script>
+</body>
+</html>
