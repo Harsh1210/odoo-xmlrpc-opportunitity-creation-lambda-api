@@ -7,7 +7,7 @@ This project provides a secure, serverless solution for connecting a frontend we
 -   **Direct Odoo Integration:** Creates Opportunities directly in the Odoo CRM pipeline.
 -   **Serverless Architecture:** Low-cost, scalable, and maintenance-free, powered by AWS Lambda.
 -   **Secure Endpoint:** Uses a Client ID and Secret to protect the public-facing Lambda Function URL from unauthorized access.
--   **Email Notifications (Optional):** Can be configured to send email notifications for new opportunities using Gmail.
+-   **HTML Email Notifications:** Can be configured to send formatted email notifications for new opportunities using AWS Simple Email Service (SES).
 -   **Decoupled:** The frontend and backend are completely separate, allowing you to use any web technology (React, Vue, plain HTML, etc.).
 
 ## Architecture Flow
@@ -16,21 +16,24 @@ The data flows from the user's browser to your Odoo CRM in the following sequenc
 
 1.  **Frontend Form**: A user submits the contact form on your website.
 2.  **HTTPS Request**: The frontend sends a `POST` request to the AWS Lambda Function URL, including the form data and security credentials in the headers.
-3.  **AWS Lambda**: The Python function is triggered. It validates the client credentials, authenticates with your Odoo instance, and creates a new opportunity.
+3.  **AWS Lambda**: The Python function is triggered. It validates the client credentials, authenticates with your Odoo instance, creates a new opportunity, and sends a notification via SES.
 4.  **Odoo CRM**: The new opportunity appears in your CRM pipeline, ready for your sales team.
 
-```Bash
-[User on Website] --(Submits Form)--> [React Contact Page] --(HTTPS POST Request)--> [AWS Lambda Function URL] --(Invokes)--> [Python Lambda Function] --(XML-RPC)--> [Odoo CRM]
+```bash
+[User on Website] --> [React App] --> [AWS Lambda Function URL] --> [Python Lambda] --+--> [Odoo CRM]
+|
++--> [AWS SES] --> [Notification Email]
 ```
+
 ---
 
 ## Prerequisites
 
 Before you begin, ensure you have the following:
 
-1.  **AWS Account:** With permissions to create IAM roles, Lambda functions, and Function URLs.
+1.  **AWS Account:** With permissions to create IAM roles, Lambda functions, Function URLs, and manage SES.
 2.  **Odoo Account:** An Odoo instance (cloud or self-hosted) with a user account that has permissions to create CRM Opportunities.
-3.  **Google Account:** A Gmail account with 2-Step Verification enabled to generate an App Password for email notifications.
+3.  **Verified SES Identity:** You must have a verified domain or email address in AWS SES to send emails from (e.g., `mohankrushiudyog.com`).
 4.  **Node.js & npm:** Required to run the React frontend locally for testing.
 5.  **Git:** To manage the source code.
 
@@ -42,17 +45,22 @@ This guide is broken into two parts: deploying the backend Lambda function and c
 
 ### Part 1: Backend Deployment (AWS Lambda)
 
-#### Step 1: Generate a Google App Password
-*This is only required if you plan to re-enable email notifications.*
+#### Step 1: Verify an Identity in AWS SES
+1.  In the AWS Console, navigate to the **Simple Email Service (SES)**.
+2.  In the left menu, go to **Verified identities**.
+3.  Click **Create identity**.
+4.  Choose **Domain** (recommended) or **Email address**. For this project, you would verify `mohankrushiudyog.com`.
+5.  Follow the on-screen instructions to add the required DNS records (for a domain) or click a verification link (for an email). The identity status must be "Verified".
 
-1.  Go to your Google Account security settings: [myaccount.google.com/security](https://myaccount.google.com/security).
-2.  Ensure **2-Step Verification** is turned **ON**.
-3.  Click on **App passwords**.
-4.  For "Select app", choose **"Other (Custom name)"**, name it `Odoo Lambda`, and click **GENERATE**.
-5.  Copy the 16-digit password shown on the yellow background. **Save this immediately**, as you won't see it again.
+#### Step 2: Grant Lambda Permissions for SES
+1.  Navigate to **IAM** in the AWS Console.
+2.  Find the execution role associated with your Lambda function (its name is usually `your-function-name-role-xxxxxx`).
+3.  Click **Add permissions** -> **Attach policies**.
+4.  Search for and select the `AmazonSESFullAccess` policy.
+5.  Click **Attach policies**.
 
-#### Step 2: Create the Lambda Function
-1.  In the AWS Console, navigate to the **Lambda** service.
+#### Step 3: Create the Lambda Function
+1.  Navigate to the **Lambda** service.
 2.  Click **Create function**.
 3.  Select **Author from scratch**.
 4.  **Function name:** `odoo-opportunity-creator`.
@@ -60,13 +68,13 @@ This guide is broken into two parts: deploying the backend Lambda function and c
 6.  **Architecture:** `x86_64`.
 7.  Click **Create function**.
 
-#### Step 3: Deploy the Code
+#### Step 4: Deploy the Code
 1.  On your new function's page, scroll down to the **Code source** section.
 2.  Open the `lambda_function.py` file.
 3.  Delete the boilerplate code and paste the entire content of the Python script from the `lambda/` directory of this repository.
 4.  Click the **Deploy** button.
 
-#### Step 4: Configure Environment Variables
+#### Step 5: Configure Environment Variables
 *This is the most critical step for security and functionality.*
 
 1.  Go to the **Configuration** tab and select **Environment variables**.
@@ -77,13 +85,13 @@ This guide is broken into two parts: deploying the backend Lambda function and c
     * `ODOO_PASSWORD`: The Odoo user's password or API Key.
     * `CLIENT_ID`: A secure, hard-to-guess string you create (e.g., a UUID).
     * `CLIENT_SECRET`: Another secure, hard-to-guess secret string.
-    * `GMAIL_EMAIL`: Your full Gmail address (`your.email@gmail.com`).
-    * `GMAIL_APP_PASSWORD`: The 16-digit Google App Password you generated.
+    * `SENDER_EMAIL`: The verified SES email address (e.g., `info@mohankrushiudyog.com`).
     * `NOTIFICATION_EMAIL`: A comma-separated list of emails to receive notifications (e.g., `sales@example.com,manager@example.com`).
+    * `AWS_REGION`: The AWS region where you use SES (e.g., `ap-south-1`).
 
 3.  Click **Save**.
 
-#### Step 5: Create and Configure the Function URL
+#### Step 6: Create and Configure the Function URL
 1.  Still on the **Configuration** tab, select **Function URL**.
 2.  Click **Create function URL**.
 3.  **Auth type:** Choose **`NONE`**.
@@ -98,7 +106,7 @@ This guide is broken into two parts: deploying the backend Lambda function and c
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/Harsh1210/odoo-xmlrpc-opportunitity-creation-lambda-api.git
+    git clone clone https://github.com/Harsh1210/odoo-xmlrpc-opportunitity-creation-lambda-api.git
     cd odoo-xmlrpc-opportunitity-creation-lambda-api
     ```
 
@@ -133,6 +141,7 @@ This guide is broken into two parts: deploying the backend Lambda function and c
     * A "Success!" toast message should appear on the webpage.
     * The browser console should log the successful response from Lambda.
     * Log in to Odoo and confirm the new opportunity has been created in your CRM pipeline.
+    * Check the inbox of the `NOTIFICATION_EMAIL` address(es) for the formatted HTML email.
 
 ---
 
@@ -145,9 +154,9 @@ If you encounter issues, check the following common problems and solutions. The 
 | `{"error": "Unauthorized"}` or `401 Unauthorized`              | The `x-client-id` or `x-client-secret` sent from the frontend do not match the Lambda environment variables. | Double-check that the `CLIENT_ID` and `CLIENT_SECRET` values in your frontend code are an exact match (including case) for the values in your Lambda function's **Environment variables**.                                                             |
 | `{"error": "Method Not Allowed"}` or `405 Method Not Allowed`    | You are making a `GET` (or other) request to the endpoint, but it only accepts `POST`.                   | Ensure you are testing with a `POST` request. If you paste the URL in a browser, it sends a `GET` request. Use `curl`, Postman, or the provided sample `test.html` form. Check that your React `fetch` call explicitly specifies `method: 'POST'`. |
 | `{"error": "Could not authenticate with Odoo: ..."}`           | One of the Odoo-related environment variables (`ODOO_URL`, `ODOO_DB`, `ODOO_USERNAME`, `ODOO_PASSWORD`) is incorrect. | Carefully verify all four Odoo environment variables in your Lambda configuration. Check for typos, extra spaces, or using `http://` in the URL. Ensure the user has the correct permissions in Odoo.                                                  |
-| The request times out (e.g., `Status: timeout`)                | The Lambda function timeout is too short, especially when email sending is enabled.                      | In your Lambda function's **Configuration -> General configuration**, increase the **Timeout** to at least **30 seconds**. The default of 3-5 seconds is often not enough for making multiple network calls.                                             |
+| The request times out (e.g., `Status: timeout`)                | The Lambda function timeout is too short, or it lacks the necessary VPC/NAT Gateway configuration to access the internet. | In your Lambda's **Configuration -> General configuration**, increase the **Timeout** to at least **30 seconds**. If it still times out (especially on the SES call), your Lambda may need internet access via a NAT Gateway in your VPC. |
+| `Failed to send SES notification email. Error: ...`            | The Lambda's execution role lacks SES permissions, or the `SENDER_EMAIL` is not a verified SES identity. | Ensure you've attached the `AmazonSESFullAccess` policy to your Lambda's IAM role. Verify that the email address in the `SENDER_EMAIL` variable has a "Verified" status in the AWS SES console.                                                      |
 | CORS Error in browser console (e.g., `blocked by CORS policy`) | The CORS settings on the Lambda Function URL are incorrect or missing.                                     | Go to your Lambda's **Configuration -> Function URL**. Click **Edit**. Ensure CORS is enabled and that `Allow origin`, `Allow methods`, and `Allow headers` are configured correctly as described in the setup guide.                                |
-| The frontend shows "Submission Failed" but the Lambda logs show success. | This often indicates a client-side issue where the browser cannot correctly parse the successful response from Lambda. | Ensure your frontend code correctly checks `response.ok` before attempting to parse the JSON body. See the provided React and HTML examples for a robust `try/catch` implementation.                                                        |
 
 ---
 
@@ -157,9 +166,9 @@ If you encounter issues, check the following common problems and solutions. The 
 
 **A:** While this setup is much more secure than exposing Odoo credentials, the Client ID and Secret are still visible in the client-side code. For production applications, you should use your build system (like Webpack or Vite) to inject these values from `.env` files. This makes it easier to manage different credentials for development and production without hardcoding them. For the highest security, you could implement a more advanced auth flow like OAuth or use AWS WAF to rate-limit and protect the endpoint.
 
-**Q: How do I re-enable the email notifications?**
+**Q: How do I disable email notifications?**
 
-**A:** In the `lambda_function.py` script, find the section labeled `"Step 3: Send an Email Notification"` and uncomment the entire `if lead_id ...` block. Make sure your `GMAIL_EMAIL` and `GMAIL_APP_PASSWORD` environment variables are correctly set.
+**A:** Simply remove the `SENDER_EMAIL` and `NOTIFICATION_EMAIL` environment variables from your Lambda function's configuration. The code will see that they are missing and skip the email-sending step.
 
 **Q: Can I use this function to create other records in Odoo, like Contacts or Helpdesk Tickets?**
 
@@ -248,3 +257,4 @@ If you want to test the Lambda function without the full React setup, you can us
     </script>
 </body>
 </html>
+
